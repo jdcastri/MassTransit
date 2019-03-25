@@ -1,11 +1,11 @@
 ﻿// Copyright 2007-2017 Chris Patterson, Dru Sellers, Travis Smith, et. al.
-//  
+//
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 // this file except in compliance with the License. You may obtain a copy of the
 // License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software distributed
 // under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
@@ -22,7 +22,6 @@ namespace MassTransit.AmazonSqsTransport.Configuration.Configurators
     using Topology.Configuration;
     using Topology.Settings;
 
-
     public class AmazonSqsBusFactoryConfigurator :
         BusFactoryConfigurator,
         IAmazonSqsBusFactoryConfigurator,
@@ -30,7 +29,8 @@ namespace MassTransit.AmazonSqsTransport.Configuration.Configurators
     {
         readonly IAmazonSqsBusConfiguration _configuration;
         readonly IAmazonSqsEndpointConfiguration _busEndpointConfiguration;
-        readonly QueueReceiveSettings _settings;
+        readonly BusQueueSettings _settings;
+        bool _isBuilt;
 
         public AmazonSqsBusFactoryConfigurator(IAmazonSqsBusConfiguration configuration, IAmazonSqsEndpointConfiguration busEndpointConfiguration)
             : base(configuration, busEndpointConfiguration)
@@ -39,12 +39,20 @@ namespace MassTransit.AmazonSqsTransport.Configuration.Configurators
             _busEndpointConfiguration = busEndpointConfiguration;
 
             var busQueueName = _configuration.Topology.Consume.CreateTemporaryQueueName("bus");
-            _settings = new QueueReceiveSettings(busQueueName, false, true);
+            _settings = new BusQueueSettings {EntityName = busQueueName};
         }
 
         public IBusControl CreateBus()
         {
-            var busReceiveEndpointConfiguration = _configuration.CreateReceiveEndpointConfiguration(_settings, _busEndpointConfiguration);
+            _isBuilt = true;
+            var settings = new QueueReceiveSettings(_settings.EntityName, _settings.Durable, _settings.AutoDelete)
+            {
+                PrefetchCount = _settings.PrefetchCount,
+                WaitTimeSeconds = _settings.WaitTimeSeconds,
+                PurgeOnStartup = _settings.PurgeOnStartup
+            };
+
+            var busReceiveEndpointConfiguration = _configuration.CreateReceiveEndpointConfiguration(settings, _busEndpointConfiguration);
 
             var builder = new ConfigurationBusBuilder(_configuration, busReceiveEndpointConfiguration, BusObservable);
 
@@ -62,29 +70,58 @@ namespace MassTransit.AmazonSqsTransport.Configuration.Configurators
                 yield return this.Failure("Bus", "The bus queue name must not be null or empty");
         }
 
+        public string EntityName
+        {
+            set
+            {
+                if (!_isBuilt)
+                    _settings.EntityName = value;
+            }
+        }
+
         public ushort PrefetchCount
         {
-            set => _settings.PrefetchCount = value;
+            set
+            {
+                if(!_isBuilt)
+                    _settings.PrefetchCount = value;
+            }
         }
 
         public ushort WaitTimeSeconds
         {
-            set => _settings.WaitTimeSeconds = value;
+            set
+            {
+                if(!_isBuilt)
+                    _settings.WaitTimeSeconds = value;
+            }
         }
 
         public bool Durable
         {
-            set => _settings.Durable = value;
+            set
+            {
+                if(!_isBuilt)
+                    _settings.Durable = value;
+            }
         }
 
         public bool AutoDelete
         {
-            set => _settings.AutoDelete = value;
+            set
+            {
+                if(!_isBuilt)
+                    _settings.AutoDelete = value;
+            }
         }
 
         public bool PurgeOnStartup
         {
-            set => _settings.PurgeOnStartup = value;
+            set
+            {
+                if(!_isBuilt)
+                    _settings.PurgeOnStartup = value;
+            }
         }
 
         public void OverrideDefaultBusEndpointQueueName(string value)

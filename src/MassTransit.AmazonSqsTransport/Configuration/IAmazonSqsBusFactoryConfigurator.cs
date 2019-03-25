@@ -1,9 +1,9 @@
 ﻿// Copyright 2007-2017 Chris Patterson, Dru Sellers, Travis Smith, et. al.
-//  
+//
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 // this file except in compliance with the License. You may obtain a copy of the
 // License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
 // 
 // Unless required by applicable law or agreed to in writing, software distributed
@@ -23,6 +23,8 @@ namespace MassTransit.AmazonSqsTransport.Configuration
         new IAmazonSqsSendTopologyConfigurator SendTopology { get; }
 
         new IAmazonSqsPublishTopologyConfigurator PublishTopology { get; }
+
+        string EntityName { set; }
 
         /// <summary>
         /// Set to true if the topology should be deployed only
