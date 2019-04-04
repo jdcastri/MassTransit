@@ -16,6 +16,8 @@ namespace MassTransit.AmazonSqsTransport.Tests
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
+    using Amazon.Runtime;
+    using Amazon.Runtime.CredentialManagement;
     using Amazon.SimpleNotificationService;
     using Amazon.SQS;
     using Configuration;
@@ -31,25 +33,6 @@ namespace MassTransit.AmazonSqsTransport.Tests
     {
         AmazonSqsTestHarness _harness;
         HandlerTestHarness<A> _handler;
-
-        [OneTimeSetUp]
-        public async Task Setup()
-        {
-            _harness = new AmazonSqsTestHarness();
-            _handler = _harness.Handler<A>(async context =>
-            {
-                var endpoint = await context.GetSendEndpoint(context.SourceAddress);
-
-                await endpoint.Send(new C());
-
-                await context.Publish(new D());
-            });
-
-            await _harness.Start();
-
-            await _harness.InputQueueSendEndpoint.Send(new A());
-            await _harness.Bus.Publish(new B());
-        }
 
         [OneTimeTearDown]
         public async Task Teardown()
@@ -173,34 +156,43 @@ namespace MassTransit.AmazonSqsTransport.Tests
         {
             var bus = Bus.Factory.CreateUsingAmazonSqs(sbc =>
             {
-                var host = sbc.Host("ap-southeast-2", h =>
+                // sbc.OverrideDefaultBusEndpointQueueName("d-oe-interfaces-service-juan-temp");
+                sbc.WaitTimeSeconds = 20;
+                var host = sbc.Host("us-east-1", h =>
                 {
-                    h.AccessKey(AwsAccessKey);
-                    h.SecretKey(AwsSecretKey);
+                    var chain = new CredentialProfileStoreChain();
+                    chain.TryGetAWSCredentials("default", out var awsCredentials);
+                    // h.Credentials(awsCredentials);
                 });
 
-                sbc.ReceiveEndpoint(host, "test", e =>
+                sbc.ReceiveEndpoint(host, "d-oe-interfaces-service-juan-test", e =>
                 {
-                    e.Handler<PingMessage>(async context =>
-                    {
-                        await context.RespondAsync(new PongMessage(context.Message.CorrelationId));
-                    });
+                    e.SubscribeMessageTopics = false;
+                    e.Durable = true;
+                    e.PrefetchCount = 68;
+                    e.WaitTimeSeconds = 2;
+
+                    e.Consumer(() => new TestConsumer());
                 });
             });
 
             await bus.StartAsync();
             try
             {
-                for (var i = 0; i < 100; i = i + 1)
+                for (var i = 0; i < 1; i = i + 1)
                 {
-                    var result = await bus.Request<PingMessage, PongMessage>(new PingMessage(), timeout: TimeSpan.FromSeconds(60));
+                    var endpoint = await bus.GetSendEndpoint(new Uri("amazonsqs://us-east-1/d-oe-interfaces-service-juan-test")).ConfigureAwait(false);
+                    await endpoint.Send(new PingMessage()).ConfigureAwait(false);
                 }
             }
             finally
             {
+                await Task.Delay(15000);
                 await bus.StopAsync();
             }
         }
+
+
 
         [Test]
         public async Task Should_connect_locally()
@@ -293,6 +285,19 @@ namespace MassTransit.AmazonSqsTransport.Tests
                     h.SecretKey(AwsSecretKey);
                 });
             });
+        }
+    }
+    class TestConsumer : IConsumer<PingMessage>,
+        IConsumer<Fault<PingMessage>>
+    {
+        public Task Consume(ConsumeContext<PingMessage> context)
+        {
+            throw new TaskCanceledException();
+        }
+
+        public Task Consume(ConsumeContext<Fault<PingMessage>> context)
+        {
+            throw new NotImplementedException();
         }
     }
 }
