@@ -38,7 +38,6 @@ namespace MassTransit.AmazonSqsTransport.Pipeline
         readonly Uri _inputAddress;
         readonly ILog _log = Logger.Get<AmazonSqsBasicConsumer>();
         readonly ClientContext _client;
-        readonly ConcurrentDictionary<string, AmazonSqsReceiveContext> _pending;
         readonly ReceiveSettings _receiveSettings;
         readonly SqsReceiveEndpointContext _context;
         readonly IDeliveryTracker _tracker;
@@ -58,8 +57,6 @@ namespace MassTransit.AmazonSqsTransport.Pipeline
             _tracker = new DeliveryTracker(HandleDeliveryComplete);
 
             _receiveSettings = client.GetPayload<ReceiveSettings>();
-
-            _pending = new ConcurrentDictionary<string, AmazonSqsReceiveContext>();
 
             _deliveryComplete = new TaskCompletionSource<bool>();
 
@@ -95,10 +92,6 @@ namespace MassTransit.AmazonSqsTransport.Pipeline
 
                 try
                 {
-                    if (!_pending.TryAdd(message.MessageId, context))
-                        if (_log.IsErrorEnabled)
-                            _log.ErrorFormat("Duplicate BasicDeliver: {0}", message.MessageId);
-
                     await _context.ReceiveObservers.PreReceive(context).ConfigureAwait(false);
 
                     await _context.ReceivePipe.Send(context).ConfigureAwait(false);
@@ -115,8 +108,6 @@ namespace MassTransit.AmazonSqsTransport.Pipeline
                 }
                 finally
                 {
-                    _pending.TryRemove(message.MessageId, out _);
-
                     context.Dispose();
                 }
             }

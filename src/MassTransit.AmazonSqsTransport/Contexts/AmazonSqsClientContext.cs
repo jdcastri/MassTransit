@@ -45,7 +45,7 @@ namespace MassTransit.AmazonSqsTransport.Contexts
         readonly ConnectionContext _connectionContext;
         readonly IAmazonSQS _amazonSqs;
         readonly IAmazonSimpleNotificationService _amazonSns;
-        readonly LimitedConcurrencyLevelTaskScheduler _taskScheduler;
+        LimitedConcurrencyLevelTaskScheduler _taskScheduler;
         readonly object _lock = new object();
         readonly IDictionary<string, string> _queueUrls;
         readonly IDictionary<string, string> _topicArns;
@@ -62,6 +62,11 @@ namespace MassTransit.AmazonSqsTransport.Contexts
 
             _queueUrls = new Dictionary<string, string>();
             _topicArns = new Dictionary<string, string>();
+        }
+
+        void ClientContext.SetFetchConcurrency(int concurrency)
+        {
+            _taskScheduler = new LimitedConcurrencyLevelTaskScheduler(concurrency);
         }
 
         public Task DisposeAsync(CancellationToken cancellationToken)
@@ -121,8 +126,6 @@ namespace MassTransit.AmazonSqsTransport.Contexts
 
             var response = await _amazonSqs.CreateQueueAsync(request).ConfigureAwait(false);
 
-            await Task.Delay(500).ConfigureAwait(false);
-
             var queueUrl = response.QueueUrl;
 
             lock (_lock)
@@ -139,6 +142,8 @@ namespace MassTransit.AmazonSqsTransport.Contexts
 
             var queueAttributes = await _amazonSqs.GetAttributesAsync(queueUrl).ConfigureAwait(false);
             var queueArn = queueAttributes[QueueAttributeName.QueueArn];
+
+            await Task.Delay(500).ConfigureAwait(false);
 
             var topicSubscriptionAttributes = topic.TopicSubscriptionAttributes;
             var queueSubscriptionAttributes = queue.QueueSubscriptionAttributes;
@@ -215,7 +220,7 @@ namespace MassTransit.AmazonSqsTransport.Contexts
                 {
                     var request = new ReceiveMessageRequest(queueUrl)
                     {
-                        MaxNumberOfMessages = receiveSettings.PrefetchCount,
+                        MaxNumberOfMessages = Math.Min(10, receiveSettings.PrefetchCount),
                         WaitTimeSeconds = receiveSettings.WaitTimeSeconds,
                         AttributeNames = new List<string> { "All" },
                         MessageAttributeNames = new List<string> { "All" }

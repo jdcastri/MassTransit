@@ -43,6 +43,8 @@ namespace MassTransit.AmazonSqsTransport
 
         Task BasicConsume(ReceiveSettings receiveSettings, IBasicConsumer consumer);
 
+        void SetFetchConcurrency(int concurrency);
+
         PublishRequest CreatePublishRequest(string topicName, byte[] body);
 
         Task Publish(PublishRequest request, CancellationToken cancellationToken = default);

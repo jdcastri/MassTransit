@@ -49,7 +49,13 @@ namespace MassTransit.AmazonSqsTransport.Pipeline
 
             var consumer = new AmazonSqsBasicConsumer(context, inputAddress, _context);
 
-            await context.BasicConsume(receiveSettings, consumer).ConfigureAwait(false);
+            var numberReceivers = receiveSettings.PrefetchCount / 10 + 1;
+            context.SetFetchConcurrency(numberReceivers);
+
+            for (var i = 0; i < numberReceivers; i++)
+            {
+                await context.BasicConsume(receiveSettings, consumer).ConfigureAwait(false);
+            }
 
             await consumer.Ready.ConfigureAwait(false);
 

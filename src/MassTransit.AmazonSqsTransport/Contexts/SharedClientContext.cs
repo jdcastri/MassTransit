@@ -53,6 +53,11 @@ namespace MassTransit.AmazonSqsTransport.Contexts
             return _context.HasPayloadType(contextType);
         }
 
+        void ClientContext.SetFetchConcurrency(int concurrency)
+        {
+            _context.SetFetchConcurrency(concurrency);
+        }
+
         bool PipeContext.TryGetPayload<TPayload>(out TPayload payload)
         {
             if (_payloadCache != null)
